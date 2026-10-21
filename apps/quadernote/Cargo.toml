@@ -1,0 +1,14 @@
+[package]
+name = "quadernote"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+quader-geom = { path = "../../crates/quader-geom" }
+quader-doc = { path = "../../crates/quader-doc" }
+quader-engine = { path = "../../crates/quader-engine" }
+quader-automation = { path = "../../crates/quader-automation" }
+quader-ui-egui = { path = "../../crates/quader-ui-egui" }
+egui = "0.31"
+eframe = "0.31"
