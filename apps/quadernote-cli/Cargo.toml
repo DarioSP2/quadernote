@@ -1,0 +1,8 @@
+[package]
+name = "quadernote-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+quader-engine = { path = "../../crates/quader-engine" }

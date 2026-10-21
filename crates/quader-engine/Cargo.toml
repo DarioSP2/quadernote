@@ -1,0 +1,10 @@
+[package]
+name = "quader-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+quader-geom = { path = "../quader-geom" }
+quader-doc = { path = "../quader-doc" }
+serde = { workspace = true }
