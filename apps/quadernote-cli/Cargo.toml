@@ -5,4 +5,12 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+quader-geom = { path = "../../crates/quader-geom" }
+quader-doc = { path = "../../crates/quader-doc" }
 quader-engine = { path = "../../crates/quader-engine" }
+quader-automation = { path = "../../crates/quader-automation" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = "3.8"
