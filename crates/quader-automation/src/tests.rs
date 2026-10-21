@@ -48,6 +48,28 @@ fn test_mcp_initialize_and_tools_list() {
 }
 
 #[test]
+fn test_jsonrpc_invalid_version() {
+    let session = EngineSession::new("Version Test");
+    let mut server = AutomationServer::new(session);
+
+    let bad_version_req = r#"{"jsonrpc": "1.0", "id": 5, "method": "initialize"}"#;
+    let resp = server
+        .handle_jsonrpc(bad_version_req)
+        .expect("expected error response");
+    let v: serde_json::Value = serde_json::from_str(&resp).unwrap();
+    assert_eq!(v["id"], 5);
+    assert_eq!(v["error"]["code"], -32600);
+
+    let missing_version_req = r#"{"id": 6, "method": "initialize"}"#;
+    let resp2 = server
+        .handle_jsonrpc(missing_version_req)
+        .expect("expected error response");
+    let v2: serde_json::Value = serde_json::from_str(&resp2).unwrap();
+    assert_eq!(v2["id"], 6);
+    assert_eq!(v2["error"]["code"], -32600);
+}
+
+#[test]
 fn test_mcp_tools_call_inspect_notebook() {
     let session = EngineSession::new("Inspect Notebook Test");
     let mut server = AutomationServer::new(session);

@@ -20,6 +20,8 @@ impl Default for ViewportTransform {
 }
 
 impl ViewportTransform {
+    pub const PIXELS_PER_MM_BASE: f32 = PIXELS_PER_MM_BASE;
+
     pub fn new(pan_mm: PointMm, zoom: f32) -> Self {
         Self {
             pan_mm,

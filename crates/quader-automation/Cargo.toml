@@ -5,7 +5,6 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-quader-geom = { path = "../quader-geom" }
 quader-doc = { path = "../quader-doc" }
 quader-engine = { path = "../quader-engine" }
 serde = { workspace = true }

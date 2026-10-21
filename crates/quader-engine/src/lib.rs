@@ -295,6 +295,23 @@ impl EngineSession {
     }
 
     pub fn execute(&mut self, cmd: Command) -> Result<CommandOutcome, EngineError> {
+        if let Command::InkEraseStroke {
+            x_mm,
+            y_mm,
+            eraser_radius_mm,
+        } = &cmd
+        {
+            let target = PointMm::new(*x_mm, *y_mm);
+            let any_hit = self
+                .active_page()?
+                .ink_strokes
+                .iter()
+                .any(|stroke| stroke.hit_test(target, *eraser_radius_mm));
+            if !any_hit {
+                return Ok(CommandOutcome::Success);
+            }
+        }
+
         // Snapshot for undo history
         let snapshot = (
             self.notebook.clone(),
@@ -359,7 +376,7 @@ impl EngineSession {
                 let mut found = false;
                 for sec in &mut self.notebook.sections {
                     if let Some(page) = sec.pages.iter_mut().find(|p| p.id == page_id) {
-                        page.title = new_title.clone();
+                        page.title = new_title;
                         found = true;
                         break;
                     }
@@ -519,10 +536,8 @@ impl EngineSession {
             } => {
                 let page = self.active_page_mut()?;
                 let target = PointMm::new(x_mm, y_mm);
-                page.ink_strokes.retain(|stroke| {
-                    let pts: Vec<PointMm> = stroke.points.iter().map(|s| s.pos_mm).collect();
-                    !quader_geom::polyline_hit_test_mm(&pts, target, eraser_radius_mm)
-                });
+                page.ink_strokes
+                    .retain(|stroke| !stroke.hit_test(target, eraser_radius_mm));
                 CommandOutcome::Success
             }
             Command::AttachmentInsert {

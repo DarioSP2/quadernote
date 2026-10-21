@@ -1,19 +1,49 @@
-use quader_automation::AutomationServer;
-use quader_engine::EngineSession;
+use quader_automation::handle_jsonrpc_on_session;
 use quader_ui_egui::QuaderUiState;
 use std::env;
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpListener;
 use std::path::PathBuf;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
+
+pub struct ControlRequest {
+    pub jsonrpc_line: String,
+    pub reply_tx: Sender<Option<String>>,
+}
 
 pub struct QuaderApp {
     pub state: QuaderUiState,
+    control_rx: Option<Receiver<ControlRequest>>,
 }
 
 impl QuaderApp {
     pub fn new() -> Self {
         Self {
             state: QuaderUiState::new(),
+            control_rx: None,
         }
+    }
+
+    pub fn with_control(control_rx: Receiver<ControlRequest>) -> Self {
+        Self {
+            state: QuaderUiState::new(),
+            control_rx: Some(control_rx),
+        }
+    }
+
+    pub fn process_pending_control_requests(&mut self) -> usize {
+        let mut count = 0;
+        if let Some(rx) = &self.control_rx {
+            while let Ok(req) = rx.try_recv() {
+                let response =
+                    handle_jsonrpc_on_session(&mut self.state.session, &req.jsonrpc_line);
+                let _ = req.reply_tx.send(response);
+                count += 1;
+            }
+        }
+        count
     }
 }
 
@@ -25,6 +55,7 @@ impl Default for QuaderApp {
 
 impl eframe::App for QuaderApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.process_pending_control_requests();
         self.state.render_ui(ctx);
     }
 }
@@ -65,6 +96,51 @@ where
     }
 }
 
+fn spawn_control_listener(
+    addr: String,
+    control_tx: Sender<ControlRequest>,
+    shared_ctx: Arc<Mutex<Option<egui::Context>>>,
+) {
+    thread::spawn(move || {
+        let listener = match TcpListener::bind(&addr) {
+            Ok(l) => l,
+            Err(_) => return,
+        };
+        println!("Control listener thread active on {}", addr);
+        for stream in listener.incoming().flatten() {
+            let mut writer = match stream.try_clone() {
+                Ok(w) => w,
+                Err(_) => continue,
+            };
+            let reader = BufReader::new(stream);
+            for line in reader.lines().map_while(Result::ok) {
+                if line.trim().is_empty() {
+                    continue;
+                }
+                let (reply_tx, reply_rx) = mpsc::channel();
+                if control_tx
+                    .send(ControlRequest {
+                        jsonrpc_line: line,
+                        reply_tx,
+                    })
+                    .is_err()
+                {
+                    return;
+                }
+                if let Ok(guard) = shared_ctx.lock() {
+                    if let Some(ctx) = guard.as_ref() {
+                        ctx.request_repaint();
+                    }
+                }
+                if let Ok(Some(resp)) = reply_rx.recv() {
+                    let _ = writeln!(writer, "{}", resp);
+                    let _ = writer.flush();
+                }
+            }
+        }
+    });
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli_args = parse_cli_args(env::args());
 
@@ -75,15 +151,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    if let Some(port) = cli_args.control_port {
+    let shared_ctx: Arc<Mutex<Option<egui::Context>>> = Arc::new(Mutex::new(None));
+    let control_rx = if let Some(port) = cli_args.control_port {
+        let (control_tx, control_rx) = mpsc::channel();
         let addr = format!("127.0.0.1:{}", port);
-        thread::spawn(move || {
-            let session = EngineSession::new("Control Session");
-            let mut server = AutomationServer::new(session);
-            println!("Control listener thread active on {}", addr);
-            let _ = server.serve_tcp_loop(&addr);
-        });
-    }
+        spawn_control_listener(addr, control_tx, Arc::clone(&shared_ctx));
+        Some(control_rx)
+    } else {
+        None
+    };
 
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -95,7 +171,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     eframe::run_native(
         "QuaderNote",
         native_options,
-        Box::new(|_cc| Ok(Box::new(QuaderApp::new()))),
+        Box::new(move |cc| {
+            if let Ok(mut guard) = shared_ctx.lock() {
+                *guard = Some(cc.egui_ctx.clone());
+            }
+            let app = match control_rx {
+                Some(rx) => QuaderApp::with_control(rx),
+                None => QuaderApp::new(),
+            };
+            Ok(Box::new(app))
+        }),
     )
     .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)
 }
@@ -121,5 +206,33 @@ mod tests {
         assert!(res.is_ok());
         assert!(shot_file.exists());
         let _ = std::fs::remove_file(shot_file);
+    }
+
+    #[test]
+    fn test_live_control_channel_updates_gui_session() {
+        let (control_tx, control_rx) = mpsc::channel();
+        let mut app = QuaderApp::with_control(control_rx);
+
+        let (reply_tx, reply_rx) = mpsc::channel();
+        let req = r##"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"execute_command","arguments":{"cmd":"section.create","args":{"name":"Live Controlled Section","color_hex":"#FF0000"}}}}"##;
+        control_tx
+            .send(ControlRequest {
+                jsonrpc_line: req.to_string(),
+                reply_tx,
+            })
+            .unwrap();
+
+        let processed = app.process_pending_control_requests();
+        assert_eq!(processed, 1);
+        assert!(app
+            .state
+            .session
+            .notebook
+            .sections
+            .iter()
+            .any(|s| s.name == "Live Controlled Section"));
+
+        let reply = reply_rx.recv().unwrap().unwrap();
+        assert!(reply.contains("CreatedSection"));
     }
 }

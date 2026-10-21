@@ -112,3 +112,65 @@ fn test_json_command_execution() {
 
     assert_eq!(session.active_page().unwrap().title, "New JSON Page");
 }
+
+#[test]
+fn test_ink_erase_stroke_miss_does_not_pollute_undo_stack() {
+    let mut session = EngineSession::new("Ink Erase Undo Test");
+
+    // Missed erase on an empty page should not push to undo stack
+    session
+        .execute(Command::InkEraseStroke {
+            x_mm: 100.0,
+            y_mm: 100.0,
+            eraser_radius_mm: 2.5,
+        })
+        .expect("Missed erase should succeed");
+    assert!(!session.can_undo());
+
+    // Add a stroke from (10, 10) to (20, 10)
+    session
+        .execute(Command::InkAddStroke {
+            color_rgba: [0, 0, 0, 255],
+            thickness_mm: 1.0,
+            is_highlighter: false,
+            points: vec![(10.0, 10.0, 1.0), (20.0, 10.0, 1.0)],
+        })
+        .expect("Add stroke should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 1);
+    assert!(session.can_undo());
+
+    // Missed erase far away should not push a snapshot onto undo_stack
+    session
+        .execute(Command::InkEraseStroke {
+            x_mm: 200.0,
+            y_mm: 200.0,
+            eraser_radius_mm: 2.5,
+        })
+        .expect("Missed erase should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 1);
+
+    // Single undo should undo the InkAddStroke directly
+    session.undo().expect("Undo should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 0);
+    assert!(!session.can_undo());
+
+    // Redo restores the stroke
+    session.redo().expect("Redo should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 1);
+
+    // Hitting erase removes the stroke and records an undo snapshot
+    session
+        .execute(Command::InkEraseStroke {
+            x_mm: 15.0,
+            y_mm: 10.5,
+            eraser_radius_mm: 2.0,
+        })
+        .expect("Hitting erase should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 0);
+
+    // Undo restores the erased stroke; redo removes it again
+    session.undo().expect("Undo erase should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 1);
+    session.redo().expect("Redo erase should succeed");
+    assert_eq!(session.active_page().unwrap().ink_strokes.len(), 0);
+}

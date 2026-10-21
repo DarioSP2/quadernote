@@ -1,4 +1,4 @@
-use quader_geom::{PointMm, RectMm};
+use quader_geom::{point_to_segment_distance_mm, PointMm, RectMm};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -111,9 +111,53 @@ impl InkStroke {
     }
 
     pub fn bounding_box(&self) -> Option<RectMm> {
-        let pts: Vec<PointMm> = self.points.iter().map(|s| s.pos_mm).collect();
-        let bbox = RectMm::from_points(&pts)?;
+        let first = self.points.first()?.pos_mm;
+        let mut min_x = first.x;
+        let mut max_x = first.x;
+        let mut min_y = first.y;
+        let mut max_y = first.y;
+
+        for sample in self.points.iter().skip(1) {
+            let pt = sample.pos_mm;
+            if pt.x < min_x {
+                min_x = pt.x;
+            }
+            if pt.x > max_x {
+                max_x = pt.x;
+            }
+            if pt.y < min_y {
+                min_y = pt.y;
+            }
+            if pt.y > max_y {
+                max_y = pt.y;
+            }
+        }
+
+        let bbox = RectMm::from_min_max(PointMm::new(min_x, min_y), PointMm::new(max_x, max_y));
         Some(bbox.inflate(self.base_thickness_mm * 0.5))
+    }
+
+    /// Hit-test if target point is within `tolerance_mm` of any segment in this stroke without allocating.
+    pub fn hit_test(&self, target: PointMm, tolerance_mm: f32) -> bool {
+        if self.points.is_empty() {
+            return false;
+        }
+        if self.points.len() == 1 {
+            if let Some(first) = self.points.first() {
+                return target.distance(first.pos_mm) <= tolerance_mm;
+            }
+            return false;
+        }
+
+        for window in self.points.windows(2) {
+            if let (Some(p1), Some(p2)) = (window.first(), window.get(1)) {
+                if point_to_segment_distance_mm(target, p1.pos_mm, p2.pos_mm) <= tolerance_mm {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 }
 

@@ -1,10 +1,8 @@
 use quader_doc::{NoteTag, PaperRuleStyle};
 use quader_engine::{Command, EngineSession, SearchHit};
-use quader_geom::{PointMm, ViewportTransform};
+use quader_geom::{PointMm, RectMm, ViewportTransform};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-
-pub const PIXELS_PER_MM_BASE: f32 = 3.779_527_6;
 
 #[cfg(test)]
 mod tests;
@@ -70,7 +68,7 @@ impl QuaderUiState {
     }
 
     fn px_per_mm(&self) -> f32 {
-        self.viewport.zoom * PIXELS_PER_MM_BASE
+        self.viewport.zoom * ViewportTransform::PIXELS_PER_MM_BASE
     }
 
     pub fn render_ui(&mut self, ctx: &egui::Context) {
@@ -358,19 +356,19 @@ impl QuaderUiState {
                 if !self.last_search_hits.is_empty() {
                     ui.separator();
                     ui.label("Search Results:");
-                    let hits = self.last_search_hits.clone();
-                    for hit in hits {
+                    let mut selected_hit: Option<(Uuid, Uuid)> = None;
+                    for hit in &self.last_search_hits {
                         ui.horizontal(|ui| {
-                            ui.label(format!("[{}] {}", hit.page_title, hit.snippet));
+                            ui.label(&hit.page_title);
+                            ui.label(&hit.snippet);
                             if ui.button("Go").clicked() {
-                                let _ = self.session.execute(Command::SectionSelect {
-                                    section_id: hit.section_id,
-                                });
-                                let _ = self.session.execute(Command::PageSelect {
-                                    page_id: hit.page_id,
-                                });
+                                selected_hit = Some((hit.section_id, hit.page_id));
                             }
                         });
+                    }
+                    if let Some((section_id, page_id)) = selected_hit {
+                        let _ = self.session.execute(Command::SectionSelect { section_id });
+                        let _ = self.session.execute(Command::PageSelect { page_id });
                     }
                 }
             });
@@ -386,15 +384,17 @@ impl QuaderUiState {
                 ui.separator();
 
                 let active_sec = self.session.active_section_id;
-                let sections = self.session.notebook.sections.clone();
+                let mut clicked_section_id: Option<Uuid> = None;
 
-                for sec in &sections {
+                for sec in &self.session.notebook.sections {
                     let is_active = sec.id == active_sec;
                     if ui.selectable_label(is_active, &sec.name).clicked() {
-                        let _ = self
-                            .session
-                            .execute(Command::SectionSelect { section_id: sec.id });
+                        clicked_section_id = Some(sec.id);
                     }
+                }
+
+                if let Some(section_id) = clicked_section_id {
+                    let _ = self.session.execute(Command::SectionSelect { section_id });
                 }
 
                 ui.separator();
@@ -418,41 +418,47 @@ impl QuaderUiState {
                 ui.separator();
 
                 let active_page_id = self.session.active_page_id;
-                let pages = match self.session.active_section() {
-                    Ok(sec) => sec.pages.clone(),
-                    Err(_) => Vec::new(),
-                };
+                let mut clicked_page_id: Option<Uuid> = None;
+                let mut page_count = 0;
 
-                for page in &pages {
-                    let indent_space = match page.indent_level {
-                        1 => "  ↳ ",
-                        2 => "    ↳ ",
-                        _ => "",
-                    };
-                    let label = format!("{}{}", indent_space, page.title);
-                    let is_active = page.id == active_page_id;
+                if let Ok(sec) = self.session.active_section() {
+                    page_count = sec.pages.len();
+                    for page in &sec.pages {
+                        let is_active = page.id == active_page_id;
+                        let clicked = match page.indent_level {
+                            1 => ui
+                                .selectable_label(is_active, format!("  ↳ {}", page.title))
+                                .clicked(),
+                            2 => ui
+                                .selectable_label(is_active, format!("    ↳ {}", page.title))
+                                .clicked(),
+                            _ => ui.selectable_label(is_active, &page.title).clicked(),
+                        };
 
-                    if ui.selectable_label(is_active, label).clicked() {
-                        let _ = self
-                            .session
-                            .execute(Command::PageSelect { page_id: page.id });
+                        if clicked {
+                            clicked_page_id = Some(page.id);
+                        }
                     }
+                }
+
+                if let Some(page_id) = clicked_page_id {
+                    let _ = self.session.execute(Command::PageSelect { page_id });
                 }
 
                 ui.separator();
 
                 ui.horizontal(|ui| {
                     if ui.button("+ Add Page").clicked() {
-                        let page_count = pages.len() + 1;
+                        let next_num = page_count + 1;
                         let _ = self.session.execute(Command::PageCreate {
-                            title: format!("Page {}", page_count),
+                            title: format!("Page {}", next_num),
                             indent_level: 0,
                         });
                     }
                     if ui.button("+ Subpage").clicked() {
-                        let page_count = pages.len() + 1;
+                        let next_num = page_count + 1;
                         let _ = self.session.execute(Command::PageCreate {
-                            title: format!("Subpage {}", page_count),
+                            title: format!("Subpage {}", next_num),
                             indent_level: 1,
                         });
                     }
@@ -483,6 +489,14 @@ impl QuaderUiState {
                 egui::pos2(canvas_rect.min.x + sx, canvas_rect.min.y + sy)
             };
 
+            let rect_to_screen = |rect_mm: RectMm, vp: &ViewportTransform| -> egui::Rect {
+                let (sx, sy, sw, sh) = vp.rect_mm_to_screen(rect_mm);
+                egui::Rect::from_min_size(
+                    egui::pos2(canvas_rect.min.x + sx, canvas_rect.min.y + sy),
+                    egui::vec2(sw, sh),
+                )
+            };
+
             let to_mm = |pos_screen: egui::Pos2, vp: &ViewportTransform| -> PointMm {
                 let local_x = pos_screen.x - canvas_rect.min.x;
                 let local_y = pos_screen.y - canvas_rect.min.y;
@@ -491,8 +505,8 @@ impl QuaderUiState {
 
             let px_per_mm = self.px_per_mm();
 
-            // Active Page Background & Rule lines
-            if let Ok(active_page) = self.session.active_page().cloned() {
+            // Active Page Background & Rule lines (immutable borrow of active_page)
+            if let Ok(active_page) = self.session.active_page() {
                 match active_page.rule_style {
                     PaperRuleStyle::None => {}
                     PaperRuleStyle::RuledLines { spacing_mm } => {
@@ -553,12 +567,7 @@ impl QuaderUiState {
                 // Render Printouts
                 for printout in &active_page.printouts {
                     for page_frame in &printout.pages {
-                        let top_left = to_screen(page_frame.bounds_mm.origin, &self.viewport);
-                        let size = egui::vec2(
-                            page_frame.bounds_mm.size.width * px_per_mm,
-                            page_frame.bounds_mm.size.height * px_per_mm,
-                        );
-                        let rect = egui::Rect::from_min_size(top_left, size);
+                        let rect = rect_to_screen(page_frame.bounds_mm, &self.viewport);
                         painter.rect_filled(rect, 2.0, egui::Color32::from_rgb(250, 250, 250));
                         painter.rect_stroke(
                             rect,
@@ -569,10 +578,7 @@ impl QuaderUiState {
                         painter.text(
                             rect.min + egui::vec2(8.0, 8.0),
                             egui::Align2::LEFT_TOP,
-                            format!(
-                                "Page {} - {}",
-                                page_frame.page_number, page_frame.extracted_text
-                            ),
+                            &page_frame.extracted_text,
                             egui::FontId::proportional(12.0),
                             egui::Color32::DARK_GRAY,
                         );
@@ -581,12 +587,7 @@ impl QuaderUiState {
 
                 // Render Embedded Sheets
                 for sheet in &active_page.sheets {
-                    let top_left = to_screen(sheet.bounds_mm.origin, &self.viewport);
-                    let size = egui::vec2(
-                        sheet.bounds_mm.size.width * px_per_mm,
-                        sheet.bounds_mm.size.height * px_per_mm,
-                    );
-                    let rect = egui::Rect::from_min_size(top_left, size);
+                    let rect = rect_to_screen(sheet.bounds_mm, &self.viewport);
                     painter.rect_filled(rect, 0.0, egui::Color32::WHITE);
                     painter.rect_stroke(
                         rect,
@@ -635,9 +636,8 @@ impl QuaderUiState {
 
                 // Render Attachment Badges (45 mm x 14 mm)
                 for att in &active_page.attachments {
-                    let top_left = to_screen(att.pos_mm, &self.viewport);
-                    let size = egui::vec2(45.0 * px_per_mm, 14.0 * px_per_mm);
-                    let rect = egui::Rect::from_min_size(top_left, size);
+                    let badge_bounds = RectMm::new(att.pos_mm.x, att.pos_mm.y, 45.0, 14.0);
+                    let rect = rect_to_screen(badge_bounds, &self.viewport);
                     painter.rect_filled(rect, 4.0, egui::Color32::from_rgb(238, 242, 255));
                     painter.rect_stroke(
                         rect,
@@ -648,7 +648,7 @@ impl QuaderUiState {
                     painter.text(
                         rect.min + egui::vec2(6.0, 4.0),
                         egui::Align2::LEFT_TOP,
-                        format!("📎 {}", att.file_name),
+                        &att.file_name,
                         egui::FontId::proportional(11.0),
                         egui::Color32::from_rgb(67, 56, 202),
                     );
@@ -656,12 +656,7 @@ impl QuaderUiState {
 
                 // Render Outlines
                 for outline in &active_page.outlines {
-                    let top_left = to_screen(outline.bounds_mm.origin, &self.viewport);
-                    let size = egui::vec2(
-                        outline.bounds_mm.size.width * px_per_mm,
-                        outline.bounds_mm.size.height * px_per_mm,
-                    );
-                    let rect = egui::Rect::from_min_size(top_left, size);
+                    let rect = rect_to_screen(outline.bounds_mm, &self.viewport);
                     painter.rect_stroke(
                         rect,
                         2.0,
@@ -671,23 +666,34 @@ impl QuaderUiState {
 
                     let mut text_y = rect.min.y + 4.0;
                     for para in &outline.paragraphs {
-                        let tag_str = match &para.tag {
-                            Some(NoteTag::Todo { checked: true }) => "[x] ",
-                            Some(NoteTag::Todo { checked: false }) => "[ ] ",
-                            Some(NoteTag::Important) => "★ ",
-                            Some(NoteTag::Question) => "? ",
-                            Some(NoteTag::Definition) => "Def: ",
-                            Some(NoteTag::Custom { label, .. }) => label.as_str(),
-                            None => "",
-                        };
-                        let line = format!("{}{}", tag_str, para.text);
-                        painter.text(
-                            egui::pos2(rect.min.x + 6.0, text_y),
-                            egui::Align2::LEFT_TOP,
-                            line,
-                            egui::FontId::proportional(13.0),
-                            egui::Color32::BLACK,
-                        );
+                        match &para.tag {
+                            None => {
+                                painter.text(
+                                    egui::pos2(rect.min.x + 6.0, text_y),
+                                    egui::Align2::LEFT_TOP,
+                                    &para.text,
+                                    egui::FontId::proportional(13.0),
+                                    egui::Color32::BLACK,
+                                );
+                            }
+                            Some(tag) => {
+                                let tag_str = match tag {
+                                    NoteTag::Todo { checked: true } => "[x] ",
+                                    NoteTag::Todo { checked: false } => "[ ] ",
+                                    NoteTag::Important => "★ ",
+                                    NoteTag::Question => "? ",
+                                    NoteTag::Definition => "Def: ",
+                                    NoteTag::Custom { label, .. } => label.as_str(),
+                                };
+                                painter.text(
+                                    egui::pos2(rect.min.x + 6.0, text_y),
+                                    egui::Align2::LEFT_TOP,
+                                    format!("{}{}", tag_str, para.text),
+                                    egui::FontId::proportional(13.0),
+                                    egui::Color32::BLACK,
+                                );
+                            }
+                        }
                         text_y += 16.0;
                     }
                 }
@@ -695,19 +701,13 @@ impl QuaderUiState {
                 // Render Ink Strokes
                 for stroke in &active_page.ink_strokes {
                     if stroke.points.len() >= 2 {
-                        let color = egui::Color32::from_rgba_unmultiplied(
-                            stroke.color_rgba[0],
-                            stroke.color_rgba[1],
-                            stroke.color_rgba[2],
-                            stroke.color_rgba[3],
-                        );
+                        let [r, g, b, a] = stroke.color_rgba;
+                        let color = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
                         let width = (stroke.base_thickness_mm * px_per_mm).max(1.0);
                         let egui_stroke = egui::Stroke::new(width, color);
 
-                        for i in 0..(stroke.points.len() - 1) {
-                            if let (Some(p1), Some(p2)) =
-                                (stroke.points.get(i), stroke.points.get(i + 1))
-                            {
+                        for window in stroke.points.windows(2) {
+                            if let (Some(p1), Some(p2)) = (window.first(), window.get(1)) {
                                 let s1 = to_screen(p1.pos_mm, &self.viewport);
                                 let s2 = to_screen(p2.pos_mm, &self.viewport);
                                 painter.line_segment([s1, s2], egui_stroke);
@@ -800,10 +800,8 @@ impl QuaderUiState {
         let draw_pixel = |buf: &mut [u8], x: u32, y: u32, color: [u8; 3]| {
             if x < width && y < height {
                 let idx = ((y * width + x) * 3) as usize;
-                if idx + 2 < buf.len() {
-                    buf[idx] = color[0];
-                    buf[idx + 1] = color[1];
-                    buf[idx + 2] = color[2];
+                if let Some(px) = buf.get_mut(idx..idx + 3) {
+                    px.copy_from_slice(&color);
                 }
             }
         };
@@ -843,7 +841,7 @@ impl QuaderUiState {
         let px_per_mm = self.px_per_mm();
 
         // Draw Canvas Items (Rule line, Outline, Ink Strokes)
-        if let Ok(active_page) = self.session.active_page().cloned() {
+        if let Ok(active_page) = self.session.active_page() {
             if active_page.rule_style == PaperRuleStyle::A4Guide210Mm {
                 let guide_x = 150 + (210.0 * px_per_mm) as u32;
                 if guide_x < right_x {
@@ -869,14 +867,11 @@ impl QuaderUiState {
             }
 
             for stroke in &active_page.ink_strokes {
+                let [r, g, b, _] = stroke.color_rgba;
+                let c = [r, g, b];
                 for pt in &stroke.points {
                     let px = 150 + (pt.pos_mm.x * px_per_mm) as u32;
                     let py = 40 + (pt.pos_mm.y * px_per_mm) as u32;
-                    let c = [
-                        stroke.color_rgba[0],
-                        stroke.color_rgba[1],
-                        stroke.color_rgba[2],
-                    ];
                     draw_rect(&mut buffer, px, py, 3, 3, c);
                 }
             }

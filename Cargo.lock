@@ -2382,7 +2382,6 @@ version = "0.1.0"
 dependencies = [
  "quader-doc",
  "quader-engine",
- "quader-geom",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -2424,12 +2423,10 @@ name = "quader-ui-egui"
 version = "0.1.0"
 dependencies = [
  "egui",
- "quader-automation",
  "quader-doc",
  "quader-engine",
  "quader-geom",
  "serde",
- "serde_json",
  "uuid",
 ]
 
@@ -2440,9 +2437,7 @@ dependencies = [
  "eframe",
  "egui",
  "quader-automation",
- "quader-doc",
  "quader-engine",
- "quader-geom",
  "quader-ui-egui",
 ]
 
@@ -2451,10 +2446,7 @@ name = "quadernote-cli"
 version = "0.1.0"
 dependencies = [
  "quader-automation",
- "quader-doc",
  "quader-engine",
- "quader-geom",
- "serde",
  "serde_json",
  "tempfile",
 ]
