@@ -497,7 +497,8 @@ impl QuaderUiState {
                     PaperRuleStyle::None => {}
                     PaperRuleStyle::RuledLines { spacing_mm } => {
                         let line_spacing_mm = spacing_mm as f32;
-                        let stroke = egui::Stroke::new(1.0, egui::Color32::from_rgb(210, 220, 240));
+                        let stroke =
+                            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(210, 220, 240));
                         let start_mm = (self.viewport.pan_mm.y / line_spacing_mm).floor()
                             * line_spacing_mm
                             - 50.0;
@@ -513,7 +514,8 @@ impl QuaderUiState {
                     }
                     PaperRuleStyle::Grid { cell_mm } => {
                         let grid_spacing_mm = cell_mm as f32;
-                        let stroke = egui::Stroke::new(0.5, egui::Color32::from_rgb(220, 220, 230));
+                        let stroke =
+                            egui::Stroke::new(0.5_f32, egui::Color32::from_rgb(220, 220, 230));
 
                         let start_x = (self.viewport.pan_mm.x / grid_spacing_mm).floor()
                             * grid_spacing_mm
@@ -541,7 +543,7 @@ impl QuaderUiState {
                     }
                     PaperRuleStyle::A4Guide210Mm => {
                         let guide_stroke =
-                            egui::Stroke::new(1.5, egui::Color32::from_rgb(239, 68, 68));
+                            egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(239, 68, 68));
                         let p1 = to_screen(PointMm::new(210.0, -1000.0), &self.viewport);
                         let p2 = to_screen(PointMm::new(210.0, 1000.0), &self.viewport);
                         painter.line_segment([p1, p2], guide_stroke);
@@ -561,7 +563,7 @@ impl QuaderUiState {
                         painter.rect_stroke(
                             rect,
                             2.0,
-                            egui::Stroke::new(1.0, egui::Color32::from_rgb(180, 180, 180)),
+                            egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(180, 180, 180)),
                             egui::StrokeKind::Outside,
                         );
                         painter.text(
@@ -589,7 +591,7 @@ impl QuaderUiState {
                     painter.rect_stroke(
                         rect,
                         0.0,
-                        egui::Stroke::new(1.5, egui::Color32::from_rgb(16, 185, 129)),
+                        egui::Stroke::new(1.5_f32, egui::Color32::from_rgb(16, 185, 129)),
                         egui::StrokeKind::Outside,
                     );
 
@@ -613,7 +615,7 @@ impl QuaderUiState {
                                         cell_rect,
                                         0.0,
                                         egui::Stroke::new(
-                                            0.5,
+                                            0.5_f32,
                                             egui::Color32::from_rgb(200, 200, 200),
                                         ),
                                         egui::StrokeKind::Outside,
@@ -640,7 +642,7 @@ impl QuaderUiState {
                     painter.rect_stroke(
                         rect,
                         4.0,
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(99, 102, 241)),
+                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(99, 102, 241)),
                         egui::StrokeKind::Outside,
                     );
                     painter.text(
@@ -663,7 +665,7 @@ impl QuaderUiState {
                     painter.rect_stroke(
                         rect,
                         2.0,
-                        egui::Stroke::new(1.0, egui::Color32::from_rgb(200, 200, 200)),
+                        egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(200, 200, 200)),
                         egui::StrokeKind::Outside,
                     );
 
