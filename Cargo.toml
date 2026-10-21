@@ -5,7 +5,9 @@ members = [
     "crates/quader-doc",
     "crates/quader-engine",
     "crates/quader-automation",
+    "crates/quader-ui-egui",
     "apps/quadernote-cli",
+    "apps/quadernote",
 ]
 
 [workspace.package]

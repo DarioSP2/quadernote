@@ -1,0 +1,19 @@
+[package]
+name = "quader-ui-egui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+quader-geom = { path = "../quader-geom" }
+quader-doc = { path = "../quader-doc" }
+quader-engine = { path = "../quader-engine" }
+quader-automation = { path = "../quader-automation" }
+egui = "0.31"
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
+[[example]]
+name = "shot"
+path = "examples/shot.rs"
