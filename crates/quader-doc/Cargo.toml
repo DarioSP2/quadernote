@@ -7,3 +7,5 @@ license.workspace = true
 [dependencies]
 quader-geom = { path = "../quader-geom" }
 serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1.10", features = ["v4", "serde"] }
