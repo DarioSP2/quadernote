@@ -7,7 +7,7 @@
 - [x] **M0.2 Spatial Geometry (`quader-geom`):** Implement `PointMm`, `SizeMm`, `RectMm`, `ViewportTransform` (pan/zoom in millimeters), and 2D spatial hit-testing (`RectMm::intersects`, `RectMm::contains`, and bounding-box queries) with 100% unit test coverage.
 - [x] **M0.3 Document, Ink & Attachment Model (`quader-doc`):** Implement `Notebook`, `Section`, `Page` (with `indent_level` 0..=2), `PaperRuleStyle` (`None`, `RuledLines`, `Grid`, `A4Guide210Mm`), `Outline` containers, `CanvasAttachment`, `PrintoutStack`, `EmbeddedSheet`, `NoteTag`, and pressure-sensitive `InkStroke` structures + JSON round-trip serialization tests.
 - [x] **M0.4 Command Engine & Undo/Redo (`quader-engine`):** Implement `EngineSession`, transactional snapshot undo/redo stack, full-text/tag search (`search_text`), and core commands for sections, pages, outlines, tags, ink, attachments, printouts, and sheets.
-- [ ] **M0.5 Headless CLI & MCP Server (`quader-automation`, `quadernote-cli`):** Expose `inspect_notebook`, `execute_command`, `search_notes`, and batch command runner over stdio and TCP `127.0.0.1:7982`.
+- [x] **M0.5 Headless CLI & MCP Server (`quader-automation`, `quadernote-cli`):** Expose `inspect_notebook`, `execute_command`, `search_notes`, and batch command runner over stdio and TCP `127.0.0.1:7982`.
 - [ ] **M0.6 Native Shell & Offscreen Test Harness (`quader-ui-egui`, `quadernote`):** Render the 4-region shell (Top Ribbon, Left Section Rail, Right Page Hierarchy, Center 2D Infinite Canvas) and an offscreen screenshot example (`shot.rs`) for agent verification.
 
 ### M1: Infinite Canvas, Rich Outlines & Smart Clipboard (Easy Wins)

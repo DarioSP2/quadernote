@@ -4,6 +4,7 @@ members = [
     "crates/quader-geom",
     "crates/quader-doc",
     "crates/quader-engine",
+    "crates/quader-automation",
     "apps/quadernote-cli",
 ]
 
